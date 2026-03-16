@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import authRouter from "./auth";
 
 dotenv.config();
 
@@ -9,6 +10,8 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/auth", authRouter);
 
 type ExerciseRequest = {
   name: string;
