@@ -5,5 +5,26 @@
     "email": "hi@gmail.com",
     "password": "$2b$10$665V1gE3zJlPjYNPR4Ta1.0F3qlNO6smJN0/eifux5tiGVEZzqfGC",
     "createdAt": "2026-03-16T21:19:20.888Z"
+  },
+  {
+    "id": "1775399242659",
+    "name": "Ariful",
+    "email": "ariful@gmail.com",
+    "password": "$2b$10$BSVtuyrmqj7hafZQVE2xOeTyc9QWK/.iRFbseKgHOaYE591m6UojG",
+    "createdAt": "2026-04-05T14:27:22.659Z"
+  },
+  {
+    "id": "1775400581984",
+    "name": "ariful",
+    "email": "jahorularif@gmail.com",
+    "password": "$2b$10$52VRSON0SFiP9g2f7cIn/u3Hajm2jXgIx67aGJLtGm0q7EsV3SKpy",
+    "createdAt": "2026-04-05T14:49:41.984Z"
+  },
+  {
+    "id": "1775403077342",
+    "name": "hi",
+    "email": "tata@gmail.com",
+    "password": "$2b$10$LNfLD.A6bC/0owSK87jZ2.MWEMIuXVri5lq4LVA9V4S2A1Pz0XD6S",
+    "createdAt": "2026-04-05T15:31:17.343Z"
   }
 ]
