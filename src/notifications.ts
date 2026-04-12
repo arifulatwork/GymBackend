@@ -16,7 +16,7 @@ type RegisterTokenBody = {
 };
 
 type SendNotificationBody = {
-  expoPushToken: string;
+  expoPushToken?: string;
   title: string;
   body: string;
   data?: Record<string, unknown>;
@@ -52,9 +52,6 @@ function writeTokens(tokens: StoredPushToken[]) {
   fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2), "utf-8");
 }
 
-//
-// 🔹 Save token
-//
 router.post("/register-token", (req: Request, res: Response) => {
   try {
     const { expoPushToken } = req.body as RegisterTokenBody;
@@ -97,9 +94,18 @@ router.post("/register-token", (req: Request, res: Response) => {
   }
 });
 
-//
-// 🔹 Send notification (manual token input)
-//
+router.get("/tokens", (_req: Request, res: Response) => {
+  try {
+    const tokens = readTokens();
+    return res.json({ tokens });
+  } catch (error) {
+    console.error("Get tokens error:", error);
+    return res.status(500).json({
+      error: "Failed to get tokens",
+    });
+  }
+});
+
 router.post("/send", async (req: Request, res: Response) => {
   try {
     const { expoPushToken, title, body, data } =
@@ -142,6 +148,225 @@ router.post("/send", async (req: Request, res: Response) => {
     return res.status(500).json({
       error: "Failed to send notification",
     });
+  }
+});
+
+router.post("/send-all", async (req: Request, res: Response) => {
+  try {
+    const { title, body, data } = req.body as SendNotificationBody;
+
+    if (!title || !body) {
+      return res.status(400).json({
+        error: "title and body are required",
+      });
+    }
+
+    const tokens = readTokens();
+
+    const validTokens = tokens
+      .map((item) => item.expoPushToken)
+      .filter((token) => Expo.isExpoPushToken(token));
+
+    if (validTokens.length === 0) {
+      return res.status(404).json({
+        error: "No valid saved tokens found",
+      });
+    }
+
+    const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+      to: token,
+      sound: "default",
+      title,
+      body,
+      data: data || {},
+    }));
+
+    const chunks = expo.chunkPushNotifications(messages);
+    const tickets = [];
+
+    for (const chunk of chunks) {
+      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      tickets.push(...ticketChunk);
+    }
+
+    return res.json({
+      message: "Notifications sent",
+      total: validTokens.length,
+      tickets,
+    });
+  } catch (error) {
+    console.error("Send all notifications error:", error);
+    return res.status(500).json({
+      error: "Failed to send notifications",
+    });
+  }
+});
+
+router.get("/admin", (_req: Request, res: Response) => {
+  const tokens = readTokens();
+
+  const options = tokens
+    .map(
+      (item) =>
+        `<option value="${item.expoPushToken}">${item.expoPushToken} (${item.updatedAt})</option>`
+    )
+    .join("");
+
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Push Notification Admin</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 20px;
+          }
+          input, textarea, select, button {
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 16px;
+            padding: 10px;
+            font-size: 16px;
+          }
+          button {
+            cursor: pointer;
+          }
+          .token-box {
+            background: #f4f4f4;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            word-break: break-all;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Push Notification Admin</h1>
+
+        <h2>Saved Tokens</h2>
+        ${tokens.length === 0 ? "<p>No tokens saved yet.</p>" : ""}
+        ${tokens
+          .map(
+            (item) =>
+              `<div class="token-box">${item.expoPushToken}<br/><small>${item.updatedAt}</small></div>`
+          )
+          .join("")}
+
+        <h2>Send to One Token</h2>
+        <form method="POST" action="/notifications/admin/send-one">
+          <label>Choose Token</label>
+          <select name="expoPushToken" required>
+            <option value="">Select a token</option>
+            ${options}
+          </select>
+
+          <label>Title</label>
+          <input name="title" placeholder="Notification title" required />
+
+          <label>Body</label>
+          <textarea name="body" placeholder="Notification body" required></textarea>
+
+          <button type="submit">Send Notification</button>
+        </form>
+
+        <h2>Send to All Tokens</h2>
+        <form method="POST" action="/notifications/admin/send-all">
+          <label>Title</label>
+          <input name="title" placeholder="Notification title" required />
+
+          <label>Body</label>
+          <textarea name="body" placeholder="Notification body" required></textarea>
+
+          <button type="submit">Send To All</button>
+        </form>
+      </body>
+    </html>
+  `);
+});
+
+router.post("/admin/send-one", async (req: Request, res: Response) => {
+  try {
+    const { expoPushToken, title, body } = req.body as {
+      expoPushToken: string;
+      title: string;
+      body: string;
+    };
+
+    if (!expoPushToken || !title || !body) {
+      return res.status(400).send("Missing required fields");
+    }
+
+    if (!Expo.isExpoPushToken(expoPushToken)) {
+      return res.status(400).send("Invalid Expo push token");
+    }
+
+    const message: ExpoPushMessage = {
+      to: expoPushToken,
+      sound: "default",
+      title,
+      body,
+      data: {},
+    };
+
+    const chunks = expo.chunkPushNotifications([message]);
+
+    for (const chunk of chunks) {
+      await expo.sendPushNotificationsAsync(chunk);
+    }
+
+    return res.send(`
+      <h2>Notification sent successfully</h2>
+      <p><a href="/notifications/admin">Go back</a></p>
+    `);
+  } catch (error) {
+    console.error("Admin send one error:", error);
+    return res.status(500).send("Failed to send notification");
+  }
+});
+
+router.post("/admin/send-all", async (req: Request, res: Response) => {
+  try {
+    const { title, body } = req.body as {
+      title: string;
+      body: string;
+    };
+
+    if (!title || !body) {
+      return res.status(400).send("Missing required fields");
+    }
+
+    const tokens = readTokens()
+      .map((item) => item.expoPushToken)
+      .filter((token) => Expo.isExpoPushToken(token));
+
+    if (tokens.length === 0) {
+      return res.status(404).send("No valid tokens found");
+    }
+
+    const messages: ExpoPushMessage[] = tokens.map((token) => ({
+      to: token,
+      sound: "default",
+      title,
+      body,
+      data: {},
+    }));
+
+    const chunks = expo.chunkPushNotifications(messages);
+
+    for (const chunk of chunks) {
+      await expo.sendPushNotificationsAsync(chunk);
+    }
+
+    return res.send(`
+      <h2>Notifications sent to ${tokens.length} device(s)</h2>
+      <p><a href="/notifications/admin">Go back</a></p>
+    `);
+  } catch (error) {
+    console.error("Admin send all error:", error);
+    return res.status(500).send("Failed to send notifications");
   }
 });
 
