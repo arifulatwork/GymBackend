@@ -2,7 +2,6 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRouter from "./auth";
-import notificationsRouter from "./notifications";
 
 dotenv.config();
 
@@ -11,10 +10,8 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.use("/auth", authRouter);
-app.use("/notifications", notificationsRouter);
 
 type ExerciseRequest = {
   name: string;
@@ -118,9 +115,7 @@ Return JSON in this exact format:
     const parsed = extractJson(content);
 
     return res.json({
-      instructions: Array.isArray(parsed.instructions)
-        ? parsed.instructions
-        : [],
+      instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
     });
   } catch (error) {
     console.error("Instructions error:", error);
