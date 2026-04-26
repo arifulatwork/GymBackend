@@ -26,6 +26,10 @@ type AddNutritionBody = {
   fat?: number;
 };
 
+type AnalyzeNutritionBody = {
+  text: string;
+};
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const NUTRITION_FILE = path.join(DATA_DIR, "nutrition.json");
 
@@ -57,6 +61,20 @@ function writeNutrition(entries: NutritionEntry[]) {
   fs.writeFileSync(NUTRITION_FILE, JSON.stringify(entries, null, 2), "utf-8");
 }
 
+function extractJson(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+
+    if (!match) {
+      throw new Error("No valid JSON found in AI response");
+    }
+
+    return JSON.parse(match[0]);
+  }
+}
+
 function getUserIdFromToken(req: Request) {
   const authHeader = req.headers.authorization;
 
@@ -76,6 +94,96 @@ function getUserIdFromToken(req: Request) {
   return decoded.userId;
 }
 
+/* ================= AI ANALYZE NUTRITION ================= */
+
+router.post("/analyze", async (req: Request, res: Response) => {
+  try {
+    const { text } = req.body as AnalyzeNutritionBody;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({
+        error: "Food text is required",
+      });
+    }
+
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a nutrition assistant. Estimate calories and macros from food text. Return only valid JSON. No markdown.",
+            },
+            {
+              role: "user",
+              content: `
+Analyze this food:
+
+${text}
+
+Return JSON only in this exact format:
+{
+  "meal": "Breakfast/Lunch/Dinner/Snack",
+  "food": "clean short food description",
+  "calories": 0,
+  "protein": 0,
+  "carbs": 0,
+  "fat": 0
+}
+              `,
+            },
+          ],
+          temperature: 0.2,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("OpenRouter nutrition error:", data);
+      return res.status(500).json({
+        error: "Failed to analyze nutrition",
+        details: data,
+      });
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      return res.status(500).json({
+        error: "AI response empty",
+      });
+    }
+
+    const parsed = extractJson(content);
+
+    return res.json({
+      meal: parsed.meal || "Meal",
+      food: parsed.food || text,
+      calories: Number(parsed.calories) || 0,
+      protein: Number(parsed.protein) || 0,
+      carbs: Number(parsed.carbs) || 0,
+      fat: Number(parsed.fat) || 0,
+    });
+  } catch (error) {
+    console.error("Nutrition analyze error:", error);
+    return res.status(500).json({
+      error: "Nutrition AI failed",
+    });
+  }
+});
+
+/* ================= GET USER NUTRITION ================= */
+
 router.get("/", (req: Request, res: Response) => {
   try {
     const userId = getUserIdFromToken(req);
@@ -89,6 +197,8 @@ router.get("/", (req: Request, res: Response) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 });
+
+/* ================= SAVE NUTRITION ================= */
 
 router.post("/", (req: Request, res: Response) => {
   try {
@@ -135,6 +245,8 @@ router.post("/", (req: Request, res: Response) => {
   }
 });
 
+/* ================= DELETE NUTRITION ================= */
+
 router.delete("/:id", (req: Request, res: Response) => {
   try {
     const userId = getUserIdFromToken(req);
@@ -147,7 +259,9 @@ router.delete("/:id", (req: Request, res: Response) => {
     );
 
     if (!entry) {
-      return res.status(404).json({ error: "Nutrition entry not found" });
+      return res.status(404).json({
+        error: "Nutrition entry not found",
+      });
     }
 
     const updatedEntries = entries.filter(
@@ -156,7 +270,9 @@ router.delete("/:id", (req: Request, res: Response) => {
 
     writeNutrition(updatedEntries);
 
-    return res.json({ message: "Nutrition entry deleted" });
+    return res.json({
+      message: "Nutrition entry deleted",
+    });
   } catch {
     return res.status(401).json({ error: "Unauthorized" });
   }
