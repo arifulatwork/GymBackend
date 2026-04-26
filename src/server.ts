@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRouter from "./auth";
+import nutritionRouter from "./nutrition";
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRouter);
+app.use("/nutrition", nutritionRouter);
 
 type ExerciseRequest = {
   name: string;
