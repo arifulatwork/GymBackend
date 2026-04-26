@@ -7,15 +7,14 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const auth_1 = __importDefault(require("./auth"));
-const notifications_1 = __importDefault(require("./notifications"));
+const nutrition_1 = __importDefault(require("./nutrition"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
 app.use("/auth", auth_1.default);
-app.use("/notifications", notifications_1.default);
+app.use("/nutrition", nutrition_1.default);
 app.get("/", (_req, res) => {
     res.json({ message: "GymFitness AI backend running 🚀" });
 });
@@ -89,9 +88,7 @@ Return JSON in this exact format:
         }
         const parsed = extractJson(content);
         return res.json({
-            instructions: Array.isArray(parsed.instructions)
-                ? parsed.instructions
-                : [],
+            instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
         });
     }
     catch (error) {
